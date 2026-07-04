@@ -5,7 +5,7 @@ A Tampermonkey userscript to add classic PS3/PS4 avatars to your PlayStation Sto
 ## Installation
 
 1. Install the [Tampermonkey](https://www.tampermonkey.net/) extension for your web browser.
-2. Open the [ps3-avatar-adder.user.js](ps3-avatar-adder.user.js) file, click **Raw** on GitHub, and install the script.
+2. Open the [ps3-avatar-adder.user.js]([ps3-avatar-adder.user.js](https://raw.githubusercontent.com/yungtry/ps3avatars/refs/heads/main/ps3-avatar-adder.user.js) file, click **Raw** on GitHub, and install the script.
 3. Visit the [PlayStation Store](https://store.playstation.com/) and make sure you are logged in.
 
 ## Tutorial
