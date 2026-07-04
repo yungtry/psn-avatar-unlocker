@@ -40,4 +40,4 @@ If the automatic capture does not trigger:
 
 ## License
 
-MIT
+This project is licensed under the PolyForm Noncommercial License 1.0.0. Under this license, you are free to run, copy, modify, and distribute the script for noncommercial purposes, but any commercial use or distribution for sale is prohibited. See the [LICENSE](LICENSE) file for the full text.
