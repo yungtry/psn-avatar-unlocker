@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+    <!-- Triangle -->
+    <path d="M12 3L17 11H7L12 3Z" stroke="#00b2ff" stroke-width="2.5" stroke-linejoin="round" />
+    <!-- Circle -->
+    <circle cx="18" cy="17" r="2.5" stroke="#f00056" stroke-width="2.5" />
+    <!-- Cross -->
+    <path d="M4 15L8 19M8 15L4 19" stroke="#5b7fff" stroke-width="2.5" stroke-linecap="round" />
+    <!-- Square -->
+    <rect x="10.5" y="15.5" width="3" height="3" stroke="#d966ff" stroke-width="2.5" stroke-linejoin="round" />
+</svg>

@@ -1,6 +1,11 @@
-# PS Store Avatar Adder
+# <img src="logo.svg" width="32" height="32" valign="middle"> PS Store Avatar Adder
 
 A Tampermonkey userscript to add classic PS3/PS4 avatars to your PlayStation Store cart, including legacy items that are no longer listed in the web store.
+
+[![Get Tampermonkey](https://img.shields.io/badge/Tampermonkey-Get%20Extension-008080?style=for-the-badge&logo=tampermonkey&logoColor=white)](https://www.tampermonkey.net/)
+[![Direct Install](https://img.shields.io/badge/Direct%20Install-Raw%20Script-0072ce?style=for-the-badge&logo=github&logoColor=white)](https://raw.githubusercontent.com/yungtry/ps3avatars/main/ps3-avatar-adder.user.js)
+[![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-Install%20Script-d9534f?style=for-the-badge)](https://greasyfork.org)
+
 
 ## Installation
 
@@ -13,6 +18,7 @@ A Tampermonkey userscript to add classic PS3/PS4 avatars to your PlayStation Sto
 Follow these steps to use the script:
 
 1. Click the circular controller symbols button in the bottom left corner of the PlayStation Store page to open the panel.
+![PS Store Avatar Adder Panel](screenshots/1.png)
 2. **Capture the API Hash**: The script requires a session-specific API hash to make requests. To capture it, simply add any standard item (such as a game [preorders do not work]) to your cart using the regular store buttons on the page. The status indicator in the panel will turn green and display the captured hash.
 3. Remove the game from the cart
 4. Paste the Avatar Content ID (for example, `EP0082-CUSA02487_00-FFXIVPIXAVATAR00`) into the input field.
