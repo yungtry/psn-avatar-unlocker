@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         PS Store Avatar Adder
-// @namespace    https://github.com/yungtry/ps3avatars
+// @namespace    https://github.com/yungtry/psn-avatar-unlocker
 // @version      6.3.0
 // @description  Adds PS3/PS4 avatars to the PlayStation Store cart. Paste the avatar ID and click the button.
 // @author       yungtry

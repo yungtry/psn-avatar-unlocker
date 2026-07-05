@@ -2,10 +2,11 @@
 
 A Tampermonkey userscript to add classic PS3/PS4 avatars to your PlayStation Store cart, including legacy items that are no longer listed in the web store.
 
-[![Get Tampermonkey](https://img.shields.io/badge/Tampermonkey-Get%20Extension-008080?style=for-the-badge&logo=tampermonkey&logoColor=white)](https://www.tampermonkey.net/)
-[![Direct Install](https://img.shields.io/badge/Direct%20Install-Raw%20Script-0072ce?style=for-the-badge&logo=github&logoColor=white)](https://raw.githubusercontent.com/yungtry/ps3avatars/main/ps3-avatar-adder.user.js)
-[![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-Install%20Script-d9534f?style=for-the-badge)](https://greasyfork.org)
+<img src="screenshots/main.png" width="480" alt="PS Store Avatar Adder Panel">
 
+[![Get Tampermonkey](https://img.shields.io/badge/Tampermonkey-Get%20Extension-008080?style=for-the-badge&logo=tampermonkey&logoColor=white)](https://www.tampermonkey.net/)
+[![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-Install%20Script-d9534f?style=for-the-badge)](https://greasyfork.org)
+[![Direct Install](https://img.shields.io/badge/Direct%20Install-Raw%20Script-0072ce?style=for-the-badge&logo=github&logoColor=white)](https://raw.githubusercontent.com/yungtry/ps3avatars/main/ps3-avatar-adder.user.js)
 
 ## Installation
 
