@@ -1,15 +1,18 @@
 // ==UserScript==
 // @name         PS Store Avatar Adder
 // @namespace    https://github.com/yungtry/psn-avatar-unlocker
-// @version      6.3.0
+// @version      6.4.0
 // @description  Adds PS3/PS4 avatars to the PlayStation Store cart. Paste the avatar ID and click the button.
 // @author       yungtry
 // @match        https://store.playstation.com/*
 // @match        https://checkout.playstation.com/*
 // @grant        GM_xmlhttpRequest
+// @grant        GM.xmlHttpRequest
 // @grant        GM_addStyle
+// @grant        GM.addStyle
 // @grant        GM_getValue
-// @grant        GM_setValue
+// @grant        GM.getValue
+// @grant        GM.setValue
 // @grant        unsafeWindow
 // @connect      web.np.playstation.com
 // @run-at       document-start
@@ -38,7 +41,7 @@
     // CONFIG
     // =========================================================================
     Object.assign(Config, {
-        GQL_URL: 'https://web.np.playstation.com/api/graphql/v1//op',
+        GQL_URL: 'https://web.np.playstation.com/api/graphql/v1/op',
         CLIENT_NAME: '@sie-ppr-web-checkout/app',
         CLIENT_VERSION: '2.176.0',
         OPERATION_NAME: 'addToCart',
@@ -47,15 +50,64 @@
     });
 
     // =========================================================================
+    // STORAGE (cross-manager: sync GM APIs, async GM4 APIs, or in-memory fallback)
+    // =========================================================================
+    // Tampermonkey/Violentmonkey expose the legacy synchronous GM_* functions and
+    // expose them on GM.* as well. Greasemonkey 4 (Firefox) only exposes the async
+    // GM.getValue/GM.setValue. Safari's Userscripts app exposes neither, so the
+    // script falls back to plain in-memory storage.
+    //
+    // Design notes:
+    // - get*() is synchronous by contract: it reads from a write-through memory
+    //   cache that is hydrated from async GM.getValue during bootstrap (App.init).
+    // - set*() writes to memory first (immediately visible) and then mirrors to
+    //   GM.setValue (async, fire-and-forget) when that API exists.
+    // - Tab-scoped fallback: when a cart request is sent via the page fetch()
+    //   (no GM_xmlhttpRequest-style backend available, e.g. Safari), the request
+    //   is executed in the page's own session, so the client identity is read
+    //   from the page's captured headers via the memory cache.
+    const Storage = {
+        cache: { 'psa_client_name': Config.CLIENT_NAME, 'psa_client_version': Config.CLIENT_VERSION, [Config.HASH_KEY]: Config.DEFAULT_HASH },
+        hasAsync() { return typeof GM !== 'undefined' && GM && typeof GM.setValue === 'function'; },
+        syncGet(key, fallback) {
+            if (typeof GM_getValue === 'function') {
+                try { return GM_getValue(key, fallback); } catch (_) { }
+            }
+            return Object.prototype.hasOwnProperty.call(this.cache, key) ? this.cache[key] : fallback;
+        },
+        set(key, val) {
+            this.cache[key] = val;
+            if (typeof GM_setValue === 'function') {
+                try { GM_setValue(key, val); } catch (_) { }
+            } else if (this.hasAsync()) {
+                try { GM.setValue(key, val); } catch (_) { }
+            }
+        },
+        // Called once during bootstrap: hydrate the memory cache from async GM.getValue
+        bootstrap() {
+            const keys = ['psa_client_name', 'psa_client_version', Config.HASH_KEY];
+            if (typeof GM !== 'undefined' && GM && typeof GM.getValue === 'function') {
+                for (const key of keys) {
+                    try {
+                        Promise.resolve(GM.getValue(key)).then((val) => {
+                            if (val !== undefined && val !== null) this.cache[key] = val;
+                        }).catch(() => { });
+                    } catch (_) { }
+                }
+            }
+        }
+    };
+
+    // =========================================================================
     // STATE
     // =========================================================================
     Object.assign(State, {
-        getClientName() { return GM_getValue('psa_client_name', Config.CLIENT_NAME); },
-        setClientName(val) { GM_setValue('psa_client_name', val); },
-        getClientVersion() { return GM_getValue('psa_client_version', Config.CLIENT_VERSION); },
-        setClientVersion(val) { GM_setValue('psa_client_version', val); },
-        getHash() { return GM_getValue(Config.HASH_KEY, Config.DEFAULT_HASH); },
-        setHash(val) { GM_setValue(Config.HASH_KEY, val); }
+        getClientName() { return Storage.syncGet('psa_client_name', Config.CLIENT_NAME); },
+        setClientName(val) { Storage.set('psa_client_name', val); },
+        getClientVersion() { return Storage.syncGet('psa_client_version', Config.CLIENT_VERSION); },
+        setClientVersion(val) { Storage.set('psa_client_version', val); },
+        getHash() { return Storage.syncGet(Config.HASH_KEY, Config.DEFAULT_HASH); },
+        setHash(val) { Storage.set(Config.HASH_KEY, val); }
     });
 
 
@@ -83,9 +135,9 @@
             if (!log) return;
             const e = document.createElement('div');
             e.className = `psa-log-entry psa-log-${level}`;
+            e.innerHTML = `<span class="psa-dot"></span>`;
             const d = document.createElement('span');
             d.textContent = text;
-            e.innerHTML = `<span class="psa-dot"></span>`;
             e.appendChild(d);
             log.appendChild(e);
             log.scrollTop = log.scrollHeight;
@@ -102,7 +154,7 @@
             const manualInput = document.getElementById('psa-manual-hash');
 
             if (dot) dot.className = hash ? '' : 'psa-hash-missing';
-            if (text) text.textContent = hash ? `Hash: ${hash.substring(0, 20)}...` : 'missing (add product to cart)';
+            if (text) text.textContent = hash ? `Hash: ${hash.substring(0, 24)}...` : 'missing (add product to cart)';
             if (manualInput) manualInput.value = hash;
         }
     });
@@ -115,52 +167,90 @@
         init() {
             const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
+            // Cross-browser patching helper. Firefox sandboxes userscripts: without
+            // exportFunction/cloneInto the patched property would live in a wrapped
+            // scope and the page could see/throw on it. Chrome/Safari userscript
+            // managers often don't expose exportFunction, so we degrade gracefully.
+            const canExport = typeof exportFunction === 'function' && typeof cloneInto === 'function';
+            const exportFn = (fn, win) => canExport ? exportFunction(fn, win || pageWindow) : fn;
+            const tryPatch = (obj, key, makeDescriptor) => {
+                try {
+                    const desc = makeDescriptor();
+                    if (desc) Object.defineProperty(obj, key, desc);
+                } catch (_) { }
+            };
+
             // ─── Hook fetch ───
-            if (pageWindow.fetch) {
-                const originalFetch = pageWindow.fetch;
-                pageWindow.fetch = function (...args) {
-                    try {
-                        const [resource, init] = args;
-                        const url = typeof resource === 'string' ? resource : resource?.url;
-                        if (url) {
-                            Interceptor.interceptUrl(url);
-                            if (init?.headers) Interceptor.interceptHeaders(init.headers);
-                            if (init?.body) Interceptor.interceptBody(init.body);
-                        }
-                    } catch (_) { }
-                    return originalFetch.apply(this, args);
-                };
-            }
+            try {
+                if (pageWindow.fetch) {
+                    const originalFetch = pageWindow.fetch;
+                    const patchedFetch = exportFn(function (...args) {
+                        try {
+                            const [resource, init] = args;
+                            const url = typeof resource === 'string' ? resource : resource?.url;
+                            if (url) {
+                                Interceptor.interceptUrl(url);
+                                if (init?.headers) Interceptor.interceptHeaders(init.headers);
+                                if (init?.body) Interceptor.interceptBody(init.body);
+                            }
+                        } catch (_) { }
+                        return originalFetch.apply(this, args);
+                    }, pageWindow);
+                    // Plain value descriptor (not an accessor): its only function
+                    // value is exportFn-wrapped, so defineProperty succeeds even
+                    // inside Firefox's Xray sandbox.
+                    tryPatch(pageWindow, 'fetch', () => ({
+                        value: patchedFetch,
+                        writable: true, configurable: true
+                    }));
+                }
+            } catch (_) { }
 
             // ─── Hook XHR ───
-            if (pageWindow.XMLHttpRequest) {
-                const originalOpen = pageWindow.XMLHttpRequest.prototype.open;
-                const originalSend = pageWindow.XMLHttpRequest.prototype.send;
-                const originalSetHeader = pageWindow.XMLHttpRequest.prototype.setRequestHeader;
+            try {
+                if (pageWindow.XMLHttpRequest) {
+                    const Proto = pageWindow.XMLHttpRequest.prototype;
+                    const originalOpen = Proto.open;
+                    const originalSend = Proto.send;
+                    const originalSetHeader = Proto.setRequestHeader;
 
-                pageWindow.XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-                    this._psaUrl = url;
-                    if (url) Interceptor.interceptUrl(url);
-                    return originalOpen.call(this, method, url, ...rest);
-                };
+                    tryPatch(Proto, 'open', () => ({
+                        value: exportFn(function (method, url, ...rest) {
+                            try {
+                                this._psaUrl = url;
+                                if (url) Interceptor.interceptUrl(url);
+                            } catch (_) { }
+                            return originalOpen.call(this, method, url, ...rest);
+                        }, pageWindow),
+                        writable: true, configurable: true
+                    }));
 
-                pageWindow.XMLHttpRequest.prototype.setRequestHeader = function (name, value, ...rest) {
-                    try {
-                        const lowerName = name.toLowerCase();
-                        if (lowerName === 'apollographql-client-name') {
-                            State.setClientName(value);
-                        } else if (lowerName === 'apollographql-client-version') {
-                            State.setClientVersion(value);
-                        }
-                    } catch (_) { }
-                    return originalSetHeader.call(this, name, value, ...rest);
-                };
+                    tryPatch(Proto, 'setRequestHeader', () => ({
+                        value: exportFn(function (name, value, ...rest) {
+                            try {
+                                const lowerName = name.toLowerCase();
+                                if (lowerName === 'apollographql-client-name') {
+                                    State.setClientName(value);
+                                } else if (lowerName === 'apollographql-client-version') {
+                                    State.setClientVersion(value);
+                                }
+                            } catch (_) { }
+                            return originalSetHeader.call(this, name, value, ...rest);
+                        }, pageWindow),
+                        writable: true, configurable: true
+                    }));
 
-                pageWindow.XMLHttpRequest.prototype.send = function (body) {
-                    if (this._psaUrl && body) Interceptor.interceptBody(body);
-                    return originalSend.call(this, body);
-                };
-            }
+                    tryPatch(Proto, 'send', () => ({
+                        value: exportFn(function (body) {
+                            try {
+                                if (this._psaUrl && body) Interceptor.interceptBody(body);
+                            } catch (_) { }
+                            return originalSend.call(this, body);
+                        }, pageWindow),
+                        writable: true, configurable: true
+                    }));
+                }
+            } catch (_) { }
         },
 
         interceptHeaders(headers) {
@@ -216,18 +306,47 @@
         },
 
         sendInterceptionNotice(op, hash) {
+            const isTop = window.self === window.top;
+            const normalizedHash = (typeof hash === 'string' ? hash : '').toLowerCase();
+
             if (op === Config.OPERATION_NAME) {
-                if (/^[a-f0-9]{64}$/.test(hash)) {
-                    State.setHash(hash);
+                // Persist valid hashes. With shared GM storage every frame writes
+                // the same value; on Safari each frame's copy is session-local and
+                // the top frame re-persists via the PSA_OP_INTERCEPTED message below.
+                if (/^[a-f0-9]{64}$/.test(normalizedHash)) {
+                    State.setHash(normalizedHash);
+                }
+                // Tell the top frame's panel which client produced the addToCart
+                // request. This matters on managers without GM_xmlhttpRequest
+                // (e.g. Safari Userscripts): the request is sent via the page's
+                // own fetch(), so the page's client identity is the authoritative one.
+                if (!isTop) {
+                    Interceptor.propagateClientIdentity();
                 }
             }
 
-            // Pass to top window if intercepted inside an iframe
-            if (window.self !== window.top) {
+            // Pass to top window if intercepted inside an iframe.
+            // The wildcard target origin is required here: this code runs inside
+            // cross-origin checkout iframes, so no specific origin can be named.
+            if (!isTop) {
                 window.top.postMessage({ type: 'PSA_OP_INTERCEPTED', op: op, hash: hash }, '*');
             } else {
                 EventHandlers.handleInterceptedOp(op, hash);
             }
+        },
+
+        propagateClientIdentity() {
+            try {
+                const name = typeof State.getClientName() === 'string' ? State.getClientName().trim() : '';
+                const ver = typeof State.getClientVersion() === 'string' ? State.getClientVersion().trim() : '';
+                if (name && ver && window.top && window.top.window) {
+                    window.top.postMessage({
+                        type: 'PSA_CLIENT_IDENTITY',
+                        clientName: name,
+                        clientVersion: ver
+                    }, '*');
+                }
+            } catch (_) { }
         }
     });
 
@@ -236,44 +355,107 @@
     // API SERVICE
     // =========================================================================
     Object.assign(ApiService, {
-        addToCartGQL(sku, hash, country, language) {
-            return new Promise((resolve) => {
-                const locale = `${language.split('-')[0]}-${country}`;
-                const clientName = State.getClientName();
-                const clientVersion = State.getClientVersion();
+        // Request backend selection, in order of preference:
+        // 1. GM_xmlhttpRequest — Tampermonkey / Violentmonkey; bypasses CORS and
+        //    allows sending the Origin/Referer headers the PSN API expects.
+        // 2. GM.xmlHttpRequest — Greasemonkey 4 (Firefox); same semantics via the async GM4 API.
+        // 3. Page fetch() — Safari's Userscripts app has no cross-origin GM request
+        //    API; the request runs with the page's own credentials/session instead.
+        backend() {
+            if (typeof GM_xmlhttpRequest === 'function') return 'gm';
+            if (typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function') return 'gm4';
+            if (typeof fetch === 'function') return 'page';
+            return null;
+        },
 
-                GM_xmlhttpRequest({
-                    method: 'POST',
-                    url: Config.GQL_URL,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'apollographql-client-name': clientName,
-                        'apollographql-client-version': clientVersion,
-                        'x-psn-app-ver': `${clientName}/v${clientVersion}`,
-                        'x-psn-correlation-id': Utils.uuid(),
-                        'x-psn-request-id': Utils.uuid(),
-                        'x-psn-storefront-type': 'checkout:store',
-                        'x-psn-store-locale-override': locale,
-                        'x-psn-store-country': country,
-                        'x-psn-store-language': language.split('-')[0],
-                        'Origin': 'https://checkout.playstation.com',
-                        'Referer': 'https://checkout.playstation.com/',
-                    },
-                    data: JSON.stringify({
-                        operationName: 'addToCart',
-                        variables: { skus: [{ skuId: sku, rewardId: 'OUTRIGHT' }] },
-                        extensions: { persistedQuery: { version: 1, sha256Hash: hash } }
-                    }),
-                    anonymous: false,
-                    onload: (resp) => {
-                        try { resolve(JSON.parse(resp.responseText)); }
-                        catch (e) { resolve({ errors: [{ message: `HTTP ${resp.status}: ${resp.statusText}` }] }); }
-                    },
+        buildRequestOpts(sku, hash, country, language) {
+            const locale = `${language.split('-')[0]}-${country}`;
+            const clientName = State.getClientName();
+            const clientVersion = State.getClientVersion();
+            return {
+                method: 'POST',
+                url: Config.GQL_URL,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'apollographql-client-name': clientName,
+                    'apollographql-client-version': clientVersion,
+                    'x-psn-app-ver': `${clientName}/v${clientVersion}`,
+                    'x-psn-correlation-id': Utils.uuid(),
+                    'x-psn-request-id': Utils.uuid(),
+                    'x-psn-storefront-type': 'checkout:store',
+                    'x-psn-store-locale-override': locale,
+                    'x-psn-store-country': country,
+                    'x-psn-store-language': language.split('-')[0],
+                    'Origin': 'https://checkout.playstation.com',
+                    'Referer': 'https://checkout.playstation.com/',
+                },
+                data: JSON.stringify({
+                    operationName: 'addToCart',
+                    variables: { skus: [{ skuId: sku, rewardId: 'OUTRIGHT' }] },
+                    extensions: { persistedQuery: { version: 1, sha256Hash: hash } }
+                })
+            };
+        },
+
+        addToCartGQL(sku, hash, country, language) {
+            const backend = ApiService.backend();
+            const opts = ApiService.buildRequestOpts(sku, hash, country, language);
+            if (backend === 'gm') return ApiService.viaGM(opts);
+            if (backend === 'gm4') return ApiService.viaGM4(opts);
+            if (backend === 'page') return ApiService.viaPageFetch(opts);
+            return Promise.resolve({ errors: [{ message: 'No usable request backend in this userscript manager.' }] });
+        },
+
+        viaGM(opts) {
+            return new Promise((resolve) => {
+                GM_xmlhttpRequest(Object.assign({}, opts, {
+                    onload: (resp) => ApiService.resolveResponse(resolve, resp),
                     onerror: () => resolve({ errors: [{ message: 'Network error' }] }),
                     ontimeout: () => resolve({ errors: [{ message: 'Timeout' }] })
-                });
+                }));
             });
+        },
+
+        viaGM4(opts) {
+            return new Promise((resolve) => {
+                try {
+                    GM.xmlHttpRequest(Object.assign({}, opts, {
+                        onload: (resp) => ApiService.resolveResponse(resolve, resp),
+                        onerror: () => resolve({ errors: [{ message: 'Network error' }] }),
+                        ontimeout: () => resolve({ errors: [{ message: 'Timeout' }] })
+                    }));
+                } catch (e) {
+                    resolve({ errors: [{ message: `GM.xmlHttpRequest failed: ${e && e.message ? e.message : e}` }] });
+                }
+            });
+        },
+
+        viaPageFetch(opts) {
+            return new Promise((resolve) => {
+                // fetch() forbids setting Origin/Referer manually; the browser
+                // attaches the page's own values instead.
+                const headers = Object.assign({}, opts.headers);
+                delete headers['Origin'];
+                delete headers['Referer'];
+                fetch(opts.url, {
+                    method: 'POST',
+                    headers: headers,
+                    body: opts.data,
+                    credentials: 'include'
+                })
+                    .then((resp) => resp.text().then((text) => ({ status: resp.status, statusText: resp.statusText, text: text })))
+                    .then(({ status, statusText, text }) => {
+                        try { resolve(JSON.parse(text)); }
+                        catch (e) { resolve({ errors: [{ message: `HTTP ${status}: ${statusText}` }] }); }
+                    })
+                    .catch(() => resolve({ errors: [{ message: 'Network error' }] }));
+            });
+        },
+
+        resolveResponse(resolve, resp) {
+            try { resolve(JSON.parse(resp.responseText)); }
+            catch (e) { resolve({ errors: [{ message: `HTTP ${resp.status}: ${resp.statusText}` }] }); }
         }
     });
 
@@ -283,7 +465,10 @@
     // =========================================================================
     Object.assign(UiComponents, {
         injectStyles() {
-            GM_addStyle(`
+            // Cross-manager style injection. Tampermonkey/Violentmonkey expose
+            // GM_addStyle; Greasemonkey 4 exposes GM.addStyle; Safari's Userscripts
+            // app exposes neither, so fall back to a plain <style> element.
+            const psaCss = `
                 #psa-panel {
                     position: fixed; bottom: 24px; left: 24px; z-index: 999999;
                     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -376,12 +561,35 @@
                 }
                 #psa-toggle-btn:hover { transform: scale(1.08) rotate(15deg); box-shadow: 0 8px 25px rgba(0, 114, 206, 0.65); }
                 #psa-toggle-btn.psa-hidden { transform: scale(0); opacity: 0; pointer-events: none; }
-            `);
+            `;
+            if (typeof GM_addStyle === 'function') {
+                try { GM_addStyle(psaCss); return; } catch (_) { }
+            }
+            if (typeof GM !== 'undefined' && GM && typeof GM.addStyle === 'function') {
+                try { GM.addStyle(psaCss); return; } catch (_) { }
+            }
+            if (!document.getElementById('psa-style')) {
+                const styleEl = document.createElement('style');
+                styleEl.id = 'psa-style';
+                styleEl.textContent = psaCss;
+                document.head.appendChild(styleEl);
+            }
         },
 
         createUI() {
+            // Defensive guard: the panel must only ever mount in the top frame.
+            if (window.self !== window.top) return;
             UiComponents.injectStyles();
             const locale = Utils.detectLocale();
+
+            // Escape dynamic values interpolated into the panel markup below
+            // (the language comes from window.location.pathname, the hash from storage)
+            const esc = (v) => String(v)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
 
             const toggleBtn = document.createElement('button');
             toggleBtn.id = 'psa-toggle-btn';
@@ -418,7 +626,7 @@
                                 <!-- Square -->
                                 <rect x="10.5" y="15.5" width="3" height="3" stroke="#d966ff" stroke-width="2.5" stroke-linejoin="round" />
                             </svg>
-                            PS Avatar Adder <span style="font-size:10px;color:#71717a;font-weight:400">v6.1</span>
+                            PS Avatar Adder <span style="font-size:10px;color:#71717a;font-weight:400">v6.4.0</span>
                         </div>
                         <button id="psa-close-btn" title="Close">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -429,7 +637,7 @@
 
                     <div id="psa-hash-status">
                         <div id="psa-hash-dot" class="${currentHashVal ? '' : 'psa-hash-missing'}"></div>
-                        <span id="psa-hash-text">Hash: ${currentHashVal ? currentHashVal.substring(0, 20) + '...' : 'missing (add any game to the cart)'}</span>
+                        <span id="psa-hash-text">Hash: ${currentHashVal ? esc(currentHashVal.substring(0, 24)) + '...' : 'missing (add any game to the cart)'}</span>
                     </div>
 
                     <div id="psa-input-group">
@@ -452,7 +660,7 @@
                             <option value="JP" ${locale.country === 'JP' ? 'selected' : ''}>🇯🇵 JP</option>
                             <option value="AU" ${locale.country === 'AU' ? 'selected' : ''}>🇦🇺 AU</option>
                         </select>
-                        <input id="psa-lang-input" type="text" value="${locale.language}" placeholder="pl-pl" />
+                        <input id="psa-lang-input" type="text" value="${esc(locale.language)}" placeholder="pl-pl" />
                     </div>
 
                     <button id="psa-add-btn">🛒 Add to Cart</button>
@@ -460,7 +668,7 @@
                     <div style="margin-top:12px;">
                         <details style="font-size:11px; color:#71717a;" ${currentHashVal ? '' : 'open'}>
                             <summary style="cursor:pointer; user-select:none;">⚙️ Advanced / Developer Options</summary>
-                            <input id="psa-manual-hash" type="text" value="${currentHashVal}" placeholder="Paste 64-character hash..."
+                            <input id="psa-manual-hash" type="text" value="${esc(currentHashVal)}" placeholder="Paste 64-character hash..."
                                 style="margin-top:8px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1);
                                 border-radius:8px; padding:8px 10px; color:#f4f4f5; font-size:11px;
                                 font-family:monospace; width:100%; box-sizing:border-box; outline:none;" />
@@ -531,8 +739,13 @@
 
             // Listen for postMessage from iframe
             window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'PSA_OP_INTERCEPTED') {
-                    EventHandlers.handleInterceptedOp(event.data.op, event.data.hash);
+                const d = event && event.data;
+                if (!d || typeof d !== 'object') return;
+                if (d.type === 'PSA_OP_INTERCEPTED') {
+                    EventHandlers.handleInterceptedOp(d.op, d.hash);
+                } else if (d.type === 'PSA_CLIENT_IDENTITY') {
+                    if (typeof d.clientName === 'string' && d.clientName) State.setClientName(d.clientName.trim());
+                    if (typeof d.clientVersion === 'string' && d.clientVersion) State.setClientVersion(d.clientVersion.trim());
                 }
             });
 
@@ -678,10 +891,17 @@
 
         handleInterceptedOp(op, hash) {
             // Log all intercepted ops to show users that the interceptor is working
-            Utils.logMessage('info', `[Intercepted] ${op}: ${hash.substring(0, 12)}...`);
+            Utils.logMessage('info', `[Intercepted] ${op}: ${String(hash || '').substring(0, 12)}...`);
 
             if (op === Config.OPERATION_NAME) {
                 Utils.logMessage('ok', '🎉 Found addToCart hash!');
+                // Persist here as well: with shared GM storage this is the
+                // authoritative write; on Safari the top frame's copy is the only
+                // one the panel can read back.
+                const normalizedHash = (typeof hash === 'string' ? hash : '').toLowerCase();
+                if (/^[a-f0-9]{64}$/.test(normalizedHash)) {
+                    State.setHash(normalizedHash);
+                }
                 Utils.updateUIHash(hash);
             }
         }
@@ -692,7 +912,9 @@
     // =========================================================================
     Object.assign(App, {
         init() {
-            // Hook fetches first
+            // Hydrate storage first (async GM.getValue on Greasemonkey 4), then
+            // hook fetches so interception sees the real page traffic.
+            Storage.bootstrap();
             Interceptor.init();
 
             // Only mount UI in top window
@@ -704,6 +926,26 @@
                 UiComponents.createUI();
             } else {
                 window.addEventListener('DOMContentLoaded', UiComponents.createUI);
+            }
+
+            // Surfaced in the panel log so users can see which capabilities their
+            // manager provides (matters on Safari and Greasemonkey).
+            const backend = ApiService.backend();
+            const backendLabel = backend === 'gm' ? 'GM_xmlhttpRequest'
+                : backend === 'gm4' ? 'GM.xmlHttpRequest'
+                : backend === 'page' ? 'page fetch (session-bound)'
+                : 'none';
+            const storageLabel = typeof GM_setValue === 'function' ? 'persistent (GM_setValue)'
+                : Storage.hasAsync() ? 'persistent (GM.setValue)'
+                : 'session-only (no GM storage)';
+            const firstLog = () => {
+                Utils.logMessage('info', `Request backend: ${backendLabel}`);
+                Utils.logMessage('info', `Storage: ${storageLabel}`);
+            };
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                setTimeout(firstLog, 0);
+            } else {
+                window.addEventListener('DOMContentLoaded', firstLog, { once: true });
             }
         }
     });

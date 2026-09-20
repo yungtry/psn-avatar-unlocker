@@ -44,6 +44,21 @@ If the automatic capture does not trigger:
 4. Inspect the Request Payload or Body of the `op` request to find `sha256Hash` (a 64-character string).
 5. Copy it, expand the **Advanced (Hash)** section in the script panel, paste the hash, and click **Save hash**.
 
+## Browser & Manager Compatibility
+
+| Environment | Status | Notes |
+| --- | --- | --- |
+| Chrome/Edge + Tampermonkey | ✅ Full | GM_xmlhttpRequest backend; hash and settings persist across sessions. |
+| Firefox + Tampermonkey | ✅ Full | Same as above. |
+| Firefox + Violentmonkey | ✅ Full | GM_xmlhttpRequest backend. |
+| Firefox + Greasemonkey 4 | ✅ Supported | Uses the async `GM.xmlHttpRequest` / `GM.setValue` APIs. Full-page intercepts may be slightly less complete on this engine — use the manual hash flow if needed. |
+| Safari + Userscripts app | ⚠️ Partial | No GM storage or cross-origin request APIs: the cart request is sent via the page's own `fetch()` (session-bound), and the captured hash/settings last only for the current tab session. |
+
+Notes for limited environments:
+
+- On Safari, use the same **Add any product to cart** capture flow — the hash capture works, but settings do not survive a page reload.
+- On Greasemonkey 4, values persist, but if automatic capture misses the hash, use the [manual hash flow](#troubleshooting-manual-hash).
+
 ## Finding Avatar Content IDs
 
 - **Product URLs**: Look at web URLs of legacy PlayStation Store pages where the Content ID is part of the link.
