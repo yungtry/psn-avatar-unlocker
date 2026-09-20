@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PS Store Avatar Adder
 // @namespace    https://github.com/yungtry/psn-avatar-unlocker
-// @version      6.4.0
+// @version      6.5.0
 // @description  Adds PS3/PS4 avatars to the PlayStation Store cart. Paste the avatar ID and click the button.
 // @author       yungtry
 // @match        https://store.playstation.com/*
@@ -470,97 +470,122 @@
             // app exposes neither, so fall back to a plain <style> element.
             const psaCss = `
                 #psa-panel {
-                    position: fixed; bottom: 24px; left: 24px; z-index: 999999;
-                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    width: 380px;
-                    transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.35s cubic-bezier(0.4,0,0.2,1);
+                    position: fixed; bottom: 20px; left: 20px; z-index: 999999;
+                    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+                    width: 320px;
+                    transition: transform 0.2s ease, opacity 0.2s ease;
                 }
-                #psa-panel.psa-hidden { transform: translateY(20px); opacity: 0; pointer-events: none; }
+                #psa-panel.psa-hidden { transform: translateY(12px); opacity: 0; pointer-events: none; }
                 #psa-card {
-                    background: #0b101d;
-                    border: 1px solid rgba(0, 114, 206, 0.4);
-                    border-radius: 12px; padding: 24px;
-                    box-shadow: 0 12px 40px rgba(0,0,0,0.65), 0 0 20px rgba(0, 114, 206, 0.15);
-                    color: #f3f4f6;
+                    background: #ffffff;
+                    border: 1px solid #e6e6e6;
+                    border-radius: 10px; padding: 16px;
+                    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+                    color: #1a1a1a;
                 }
-                #psa-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-                #psa-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: 0.05em; }
+                #psa-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+                #psa-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #1a1a1a; }
+                #psa-title svg { color: #0072ce; flex-shrink: 0; }
+                #psa-title .psa-ver { font-size: 11px; color: #8f8f8f; font-weight: 400; }
                 #psa-close-btn {
-                    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-                    border-radius: 6px; color: #9ca3af; cursor: pointer; width: 28px; height: 28px;
-                    display: flex; align-items: center; justify-content: center; transition: all 0.2s; padding: 0;
+                    background: none; border: none; color: #8f8f8f; cursor: pointer;
+                    width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+                    border-radius: 6px; padding: 0;
                 }
-                #psa-close-btn:hover { background: #ef4444; color: #ffffff; border-color: #ef4444; }
-                #psa-input-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-                #psa-input-label { font-size: 11px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.08em; }
+                #psa-close-btn:hover { background: #f0f0f0; color: #1a1a1a; }
+                #psa-hash-status {
+                    display: flex; align-items: center; gap: 7px; font-size: 12px; color: #6f6f6f;
+                    padding: 8px 10px; background: #f6f6f6; border-radius: 6px; margin-bottom: 12px;
+                }
+                #psa-hash-dot {
+                    width: 8px; height: 8px; border-radius: 50%; background: #2f9e44; flex-shrink: 0;
+                }
+                #psa-hash-dot.psa-hash-missing { background: #d0d0d0; }
+                #psa-input-group { margin-bottom: 10px; }
+                #psa-input-label { display: block; font-size: 11px; font-weight: 500; color: #6f6f6f; margin-bottom: 5px; }
                 #psa-avatar-input {
-                    background: #161c2c; border: 1px solid #1f293d;
-                    border-radius: 6px; padding: 12px 14px; color: #ffffff; font-size: 13px;
-                    font-family: 'SF Mono','Fira Code',monospace; outline: none;
-                    transition: border-color 0.25s, box-shadow 0.25s; width: 100%; box-sizing: border-box;
+                    background: #ffffff; border: 1px solid #d5d5d5;
+                    border-radius: 6px; padding: 9px 11px; color: #1a1a1a; font-size: 12.5px;
+                    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; outline: none;
+                    transition: border-color 0.15s; width: 100%; box-sizing: border-box;
                 }
-                #psa-avatar-input::placeholder { color: #4b5563; }
-                #psa-avatar-input:focus { border-color: #0072ce; box-shadow: 0 0 0 3px rgba(0, 114, 206, 0.25); }
-                #psa-country-group { display: flex; gap: 8px; margin-bottom: 16px; }
+                #psa-avatar-input::placeholder { color: #b3b3b3; }
+                #psa-avatar-input:focus { border-color: #0072ce; }
+                #psa-country-group { display: flex; gap: 8px; margin-bottom: 14px; }
                 #psa-country-select, #psa-lang-input {
-                    background: #161c2c; border: 1px solid #1f293d;
-                    border-radius: 6px; padding: 10px 12px; color: #ffffff; font-size: 12px;
+                    background: #ffffff; border: 1px solid #d5d5d5;
+                    border-radius: 6px; padding: 8px 10px; color: #1a1a1a; font-size: 12px;
                     outline: none; flex: 1; box-sizing: border-box;
                 }
-                #psa-country-select option { background: #0b101d; color: #ffffff; }
+                #psa-country-select:focus, #psa-lang-input:focus { border-color: #0072ce; }
                 #psa-add-btn {
-                    width: 100%; padding: 12px 20px; border: none; border-radius: 24px;
-                    font-size: 14px; font-weight: 700; cursor: pointer;
-                    background: #0072ce;
-                    color: white; box-shadow: 0 4px 12px rgba(0, 114, 206, 0.35);
-                    transition: all 0.2s; position: relative; overflow: hidden;
-                    text-transform: uppercase; letter-spacing: 0.05em;
+                    width: 100%; padding: 10px 16px; border: none; border-radius: 8px;
+                    font-size: 13px; font-weight: 600; cursor: pointer;
+                    background: #0072ce; color: #ffffff;
+                    transition: background 0.15s; position: relative;
                 }
-                #psa-add-btn:hover:not(:disabled) { background: #0082eb; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0, 114, 206, 0.5); }
-                #psa-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+                #psa-add-btn:hover:not(:disabled) { background: #0063b4; }
+                #psa-add-btn:disabled { opacity: 0.45; cursor: not-allowed; }
                 #psa-add-btn.psa-loading { color: transparent; }
                 #psa-add-btn.psa-loading::after {
                     content: ''; position: absolute; top: 50%; left: 50%;
-                    width: 20px; height: 20px; margin: -10px 0 0 -10px;
-                    border: 2px solid rgba(255,255,255,0.3); border-top-color: white;
+                    width: 16px; height: 16px; margin: -8px 0 0 -8px;
+                    border: 2px solid rgba(255,255,255,0.35); border-top-color: #ffffff;
                     border-radius: 50%; animation: psa-spin 0.6s linear infinite;
                 }
                 @keyframes psa-spin { to { transform: rotate(360deg); } }
+                #psa-advanced { margin-top: 10px; }
+                #psa-advanced summary { font-size: 11.5px; color: #8f8f8f; cursor: pointer; user-select: none; }
+                #psa-advanced summary:hover { color: #1a1a1a; }
+                #psa-advanced[open] summary { margin-bottom: 10px; }
+                .psa-adv-label { font-size: 11px; font-weight: 500; color: #6f6f6f; margin: 10px 0 5px; }
+                .psa-adv-input {
+                    background: #ffffff; border: 1px solid #d5d5d5; border-radius: 6px;
+                    padding: 8px 10px; color: #1a1a1a; font-size: 11.5px;
+                    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+                    width: 100%; box-sizing: border-box; outline: none;
+                }
+                .psa-adv-input:focus { border-color: #0072ce; }
+                .psa-adv-row { display: flex; gap: 8px; margin-top: 8px; }
+                .psa-adv-btn {
+                    flex: 1; padding: 6px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 500;
+                    cursor: pointer; transition: background 0.15s;
+                    background: #f0f0f0; border: 1px solid #d5d5d5; color: #1a1a1a;
+                }
+                .psa-adv-btn:hover { background: #e6e6e6; }
+                .psa-adv-btn.psa-danger { background: #fdf1f1; border-color: #f0cccc; color: #b42323; }
+                .psa-adv-btn.psa-danger:hover { background: #fbe4e4; }
+                #psa-add-raw-btn {
+                    margin-top: 8px; width: 100%; padding: 7px 10px; border-radius: 6px;
+                    font-size: 11.5px; font-weight: 500; cursor: pointer; transition: background 0.15s;
+                    background: #f0f0f0; border: 1px solid #d5d5d5; color: #1a1a1a;
+                }
+                #psa-add-raw-btn:hover { background: #e6e6e6; }
+                .psa-adv-divider { border: none; border-top: 1px solid #ececec; margin: 12px 0 0; }
                 #psa-log {
-                    margin-top: 14px; max-height: 180px; overflow-y: auto;
-                    font-size: 11px; font-family: 'SF Mono','Fira Code',monospace; line-height: 1.5;
-                    scrollbar-width: thin; background: #070a12; padding: 10px; border-radius: 6px;
-                    border: 1px solid #131926;
+                    margin-top: 12px; max-height: 150px; overflow-y: auto;
+                    font-size: 11px; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; line-height: 1.5;
+                    scrollbar-width: thin;
                 }
-                .psa-log-entry { padding: 3px 0; display: flex; align-items: flex-start; gap: 6px; }
-                .psa-log-entry .psa-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
-                .psa-log-info .psa-dot { background: #0072ce; } .psa-log-ok .psa-dot { background: #10b981; }
-                .psa-log-warn .psa-dot { background: #f59e0b; } .psa-log-err .psa-dot { background: #ef4444; }
-                .psa-log-info { color: #9ca3af; } .psa-log-ok { color: #34d399; }
-                .psa-log-warn { color: #fbbf24; } .psa-log-err { color: #f87171; }
-                #psa-hash-status {
-                    display: flex; align-items: center; gap: 6px; font-size: 11px; color: #9ca3af;
-                    margin-bottom: 14px; padding: 8px 12px;
-                    background: #161c2c; border-radius: 6px; border: 1px solid #1f293d;
-                }
-                #psa-hash-dot {
-                    width: 8px; height: 8px; border-radius: 50%; background: #10b981;
-                    box-shadow: 0 0 6px rgba(16,185,129,0.5);
-                }
-                #psa-hash-dot.psa-hash-missing {
-                    background: #ef4444;
-                    box-shadow: 0 0 6px rgba(239,68,68,0.5);
-                }
+                #psa-log:empty { display: none; }
+                .psa-log-entry { padding: 2px 0; display: flex; align-items: flex-start; gap: 6px; }
+                .psa-log-entry .psa-dot { width: 5px; height: 5px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+                .psa-log-info .psa-dot { background: #b3b3b3; } .psa-log-info { color: #6f6f6f; }
+                .psa-log-ok .psa-dot { background: #2f9e44; } .psa-log-ok { color: #2b8a3e; }
+                .psa-log-warn .psa-dot { background: #e8930c; } .psa-log-warn { color: #b06d0a; }
+                .psa-log-err .psa-dot { background: #e03131; } .psa-log-err { color: #c92a2a; }
                 #psa-toggle-btn {
-                    position: fixed; bottom: 24px; left: 24px; z-index: 999998;
-                    width: 52px; height: 52px; border-radius: 50%;
-                    border: 2px solid #0072ce;
-                    background: #0b101d;
-                    color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
-                    box-shadow: 0 6px 20px rgba(0, 114, 206, 0.4); transition: all 0.3s;
+                    position: fixed; bottom: 20px; left: 20px; z-index: 999998;
+                    width: 44px; height: 44px; border-radius: 50%;
+                    border: 1px solid #d5d5d5;
+                    background: #ffffff;
+                    color: #0072ce; cursor: pointer; display: flex; align-items: center; justify-content: center;
+                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12); transition: box-shadow 0.15s, transform 0.2s ease, opacity 0.2s ease;
+                    padding: 0;
                 }
-                #psa-toggle-btn:hover { transform: scale(1.08) rotate(15deg); box-shadow: 0 8px 25px rgba(0, 114, 206, 0.65); }
-                #psa-toggle-btn.psa-hidden { transform: scale(0); opacity: 0; pointer-events: none; }
+                #psa-toggle-btn:hover { box-shadow: 0 3px 14px rgba(0, 0, 0, 0.2); }
+                #psa-toggle-btn svg { color: #0072ce; }
+                #psa-toggle-btn.psa-hidden { transform: scale(0.9); opacity: 0; pointer-events: none; }
             `;
             if (typeof GM_addStyle === 'function') {
                 try { GM_addStyle(psaCss); return; } catch (_) { }
@@ -594,15 +619,10 @@
             const toggleBtn = document.createElement('button');
             toggleBtn.id = 'psa-toggle-btn';
             toggleBtn.innerHTML = `
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <!-- Triangle -->
-                    <path d="M12 3L17 11H7L12 3Z" stroke="#00b2ff" stroke-width="2.5" stroke-linejoin="round" />
-                    <!-- Circle -->
-                    <circle cx="18" cy="17" r="2.5" stroke="#f00056" stroke-width="2.5" />
-                    <!-- Cross -->
-                    <path d="M4 15L8 19M8 15L4 19" stroke="#5b7fff" stroke-width="2.5" stroke-linecap="round" />
-                    <!-- Square -->
-                    <rect x="10.5" y="15.5" width="3" height="3" stroke="#d966ff" stroke-width="2.5" stroke-linejoin="round" />
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="10" cy="8" r="3.25" stroke="currentColor" stroke-width="1.8" />
+                    <path d="M4.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                    <path d="M18.5 10.5v5M16 13h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
                 </svg>`;
             toggleBtn.title = 'PS Avatar Adder';
             document.body.appendChild(toggleBtn);
@@ -616,17 +636,12 @@
                 <div id="psa-card">
                     <div id="psa-header">
                         <div id="psa-title">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="margin-right:2px;">
-                                <!-- Triangle -->
-                                <path d="M12 3L17 11H7L12 3Z" stroke="#00b2ff" stroke-width="2.5" stroke-linejoin="round" />
-                                <!-- Circle -->
-                                <circle cx="18" cy="17" r="2.5" stroke="#f00056" stroke-width="2.5" />
-                                <!-- Cross -->
-                                <path d="M4 15L8 19M8 15L4 19" stroke="#5b7fff" stroke-width="2.5" stroke-linecap="round" />
-                                <!-- Square -->
-                                <rect x="10.5" y="15.5" width="3" height="3" stroke="#d966ff" stroke-width="2.5" stroke-linejoin="round" />
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <circle cx="10" cy="8" r="3.25" stroke="currentColor" stroke-width="1.8" />
+                                <path d="M4.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                                <path d="M18.5 10.5v5M16 13h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
                             </svg>
-                            PS Avatar Adder <span style="font-size:10px;color:#71717a;font-weight:400">v6.4.0</span>
+                            PS Avatar Adder <span class="psa-ver">v6.5.0</span>
                         </div>
                         <button id="psa-close-btn" title="Close">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -663,40 +678,22 @@
                         <input id="psa-lang-input" type="text" value="${esc(locale.language)}" placeholder="pl-pl" />
                     </div>
 
-                    <button id="psa-add-btn">🛒 Add to Cart</button>
+                    <button id="psa-add-btn">Add to Cart</button>
 
-                    <div style="margin-top:12px;">
-                        <details style="font-size:11px; color:#71717a;" ${currentHashVal ? '' : 'open'}>
-                            <summary style="cursor:pointer; user-select:none;">⚙️ Advanced / Developer Options</summary>
-                            <input id="psa-manual-hash" type="text" value="${esc(currentHashVal)}" placeholder="Paste 64-character hash..."
-                                style="margin-top:8px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1);
-                                border-radius:8px; padding:8px 10px; color:#f4f4f5; font-size:11px;
-                                font-family:monospace; width:100%; box-sizing:border-box; outline:none;" />
-                            <div style="margin-top:6px; display:flex; gap:8px;">
-                                <button id="psa-save-hash" style="background:rgba(99,102,241,0.2);
-                                    border:1px solid rgba(99,102,241,0.3); border-radius:6px; color:#818cf8;
-                                    cursor:pointer; padding:4px 12px; font-size:11px; flex:1; font-weight:600;
-                                    transition:all 0.2s;">Save hash</button>
-                                <button id="psa-delete-hash" style="background:rgba(239,68,68,0.2);
-                                    border:1px solid rgba(239,68,68,0.3); border-radius:6px; color:#fca5a5;
-                                    cursor:pointer; padding:4px 12px; font-size:11px; flex:1; font-weight:600;
-                                    transition:all 0.2s;">Delete hash</button>
-                            </div>
+                    <details id="psa-advanced" ${currentHashVal ? '' : 'open'}>
+                        <summary>Advanced</summary>
+                        <div class="psa-adv-label">Captured hash</div>
+                        <input id="psa-manual-hash" type="text" class="psa-adv-input" value="${esc(currentHashVal)}" placeholder="Paste 64-character hash..." />
+                        <div class="psa-adv-row">
+                            <button id="psa-save-hash" class="psa-adv-btn">Save hash</button>
+                            <button id="psa-delete-hash" class="psa-adv-btn psa-danger">Delete hash</button>
+                        </div>
 
-                            <!-- Raw SKU Sender (Dev Panel) -->
-                            <div style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.06); padding-top:10px;">
-                                <div style="font-size:10px; color:#9ca3af; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em;">Send Raw SKU (No suffix)</div>
-                                <input id="psa-raw-sku-input" type="text" placeholder="e.g. EP0101-NPEB00685_00-AVMETALGEA000002-E001"
-                                    style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1);
-                                    border-radius:8px; padding:8px 10px; color:#f4f4f5; font-size:11px;
-                                    font-family:monospace; width:100%; box-sizing:border-box; outline:none;" />
-                                <button id="psa-add-raw-btn" style="margin-top:6px; width:100%; background:rgba(0,114,206,0.2);
-                                    border:1px solid rgba(0,114,206,0.4); border-radius:6px; color:#00b2ff;
-                                    cursor:pointer; padding:6px 12px; font-size:11px; font-weight:700;
-                                    transition:all 0.2s; text-transform:uppercase; letter-spacing:0.05em;">🚀 Add Raw SKU</button>
-                            </div>
-                        </details>
-                    </div>
+                        <hr class="psa-adv-divider" />
+                        <div class="psa-adv-label">Raw SKU (no suffix)</div>
+                        <input id="psa-raw-sku-input" type="text" class="psa-adv-input" placeholder="e.g. EP0101-NPEB00685_00-AVMETALGEA000002-E001" />
+                        <button id="psa-add-raw-btn">Add raw SKU</button>
+                    </details>
 
                     <div id="psa-log"></div>
                 </div>
@@ -805,8 +802,8 @@
                 const data = await ApiService.addToCartGQL(sku, activeHash, country, language);
 
                 if (data?.data?.addToCart) {
-                    Utils.logMessage('ok', `✓ Added successfully: ${sku}`);
-                    Utils.logMessage('ok', '🎉 Success! Item is in your cart.');
+                    Utils.logMessage('ok', `Added to cart: ${sku}`);
+                    Utils.logMessage('ok', 'Success — item is in your cart.');
                     btn.disabled = false;
                     btn.classList.remove('psa-loading');
                     return;
@@ -832,7 +829,7 @@
                     // If it is not a SKU not found error, we found the right ID. Stop searching.
                     if (!msg.includes('SKU not found')) {
                         if (msg.includes('storefront') || msg.includes('store-front') || msg.includes('Store Front')) {
-                            Utils.logMessage('ok', '⚠️ Received storefront error. Legacy PS3/PS4 avatars are often still successfully added to cart despite this! Check your cart on the official site.');
+                            Utils.logMessage('warn', 'Storefront error — legacy PS3/PS4 avatars are often still added despite this. Check your cart on the official site.');
                         }
                         btn.disabled = false;
                         btn.classList.remove('psa-loading');
@@ -873,14 +870,14 @@
             const data = await ApiService.addToCartGQL(rawSku, activeHash, country, language);
 
             if (data?.data?.addToCart) {
-                Utils.logMessage('ok', `✓ Added successfully: ${rawSku}`);
-                Utils.logMessage('ok', '🎉 Success! Item is in your cart.');
+                Utils.logMessage('ok', `Added to cart: ${rawSku}`);
+                Utils.logMessage('ok', 'Success — item is in your cart.');
             } else if (data?.errors) {
                 const err = data.errors[0];
                 const msg = err?.message || 'Error';
                 Utils.logMessage('err', `Failed: ${msg}`);
                 if (msg.includes('storefront') || msg.includes('store-front') || msg.includes('Store Front')) {
-                    Utils.logMessage('ok', '⚠️ Storefront error: Legacy PS3/PS4 avatars are often still successfully added to cart despite this! Check your cart on the official site.');
+                    Utils.logMessage('warn', 'Storefront error — legacy PS3/PS4 avatars are often still added despite this. Check your cart on the official site.');
                 }
             } else {
                 Utils.logMessage('err', 'Unknown response from server.');
@@ -894,7 +891,7 @@
             Utils.logMessage('info', `[Intercepted] ${op}: ${String(hash || '').substring(0, 12)}...`);
 
             if (op === Config.OPERATION_NAME) {
-                Utils.logMessage('ok', '🎉 Found addToCart hash!');
+                Utils.logMessage('ok', 'Found addToCart hash.');
                 // Persist here as well: with shared GM storage this is the
                 // authoritative write; on Safari the top frame's copy is the only
                 // one the panel can read back.
