@@ -680,7 +680,7 @@
 
                     <button id="psa-add-btn">Add to Cart</button>
 
-                    <details id="psa-advanced" ${currentHashVal ? '' : 'open'}>
+                    <details id="psa-advanced">
                         <summary>Advanced</summary>
                         <div class="psa-adv-label">Captured hash</div>
                         <input id="psa-manual-hash" type="text" class="psa-adv-input" value="${esc(currentHashVal)}" placeholder="Paste 64-character hash..." />
