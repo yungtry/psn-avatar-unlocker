@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PS Store Avatar Adder
 // @namespace    https://github.com/yungtry/psn-avatar-unlocker
-// @version      6.5.0
+// @version      6.5.1
 // @description  Adds PS3/PS4 avatars to the PlayStation Store cart. Paste the avatar ID and click the button.
 // @author       yungtry
 // @match        https://store.playstation.com/*
@@ -44,7 +44,7 @@
         GQL_URL: 'https://web.np.playstation.com/api/graphql/v1/op',
         CLIENT_NAME: '@sie-ppr-web-checkout/app',
         CLIENT_VERSION: '2.176.0',
-        OPERATION_NAME: 'addToCart',
+        OPERATION_NAME: 'addToUnifiedCart',
         HASH_KEY: 'psa_addToCart_hash',
         DEFAULT_HASH: ''
     });
@@ -391,7 +391,7 @@
                     'Referer': 'https://checkout.playstation.com/',
                 },
                 data: JSON.stringify({
-                    operationName: 'addToCart',
+                    operationName: Config.OPERATION_NAME,
                     variables: { skus: [{ skuId: sku, rewardId: 'OUTRIGHT' }] },
                     extensions: { persistedQuery: { version: 1, sha256Hash: hash } }
                 })
@@ -801,7 +801,7 @@
 
                 const data = await ApiService.addToCartGQL(sku, activeHash, country, language);
 
-                if (data?.data?.addToCart) {
+                if ((data?.data?.addToUnifiedCart || data?.data?.addToCart)) {
                     Utils.logMessage('ok', `Added to cart: ${sku}`);
                     Utils.logMessage('ok', 'Success — item is in your cart.');
                     btn.disabled = false;
@@ -869,7 +869,7 @@
 
             const data = await ApiService.addToCartGQL(rawSku, activeHash, country, language);
 
-            if (data?.data?.addToCart) {
+            if ((data?.data?.addToUnifiedCart || data?.data?.addToCart)) {
                 Utils.logMessage('ok', `Added to cart: ${rawSku}`);
                 Utils.logMessage('ok', 'Success — item is in your cart.');
             } else if (data?.errors) {
